@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local telemetry and reports: never publish personal conversation data
+*.jsonl
+!examples/*.jsonl
+coverage.json
+ledger.jsonl
+report.md
+monitor.log
+token-audit-output/
+output/
+reports/
+
+# Local secrets and editor/OS files
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea/
+.vscode/
