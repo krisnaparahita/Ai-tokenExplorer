@@ -50,8 +50,8 @@ The collector reads usage records already written by your harness, normalizes th
 ### 1. Clone over SSH
 
 ```sh
-git clone git@github.com:krisna-AI/token-explorer.git
-cd token-explorer
+git clone git@github.com:krisnaparahita/Ai-tokenExplorer.git
+cd Ai-tokenExplorer
 ```
 
 ### 2. Install the AI skill
@@ -303,7 +303,7 @@ Remove that exact plist to prevent startup at the next login. Installed skill fo
 ## Repository structure
 
 ```text
-token-explorer/
+Ai-tokenExplorer/
 ├── README.md
 ├── .gitignore
 ├── docs/
