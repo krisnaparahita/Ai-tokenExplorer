@@ -109,6 +109,30 @@ for doc in ("README.md", "SKILL.md", "AGENTS.md", "docs/development.md", "refere
     if hit:
         fail(f"Use repo-root paths in {doc}: found {hit.group(0)!r}")
 
+# --- the website loads nothing from other sites and points at the project ------------
+site = read(ROOT / "site" / "index.html")
+if not re.search(r"(?i)<html[^>]*\blang=", site):
+    fail("Add a lang attribute to site/index.html")
+meta = need(re.search(r'<meta name="description" content="([^"]+)"', site), "Add a meta description to site/index.html").group(1)
+if len(meta) > 200:
+    fail(f"Keep the site meta description at 200 characters or fewer: it is {len(meta)}")
+EXTERNAL = (r"<script[^>]+src=", r"<link[^>]+href=.https?:", r"<img[^>]+src=.https?:", r"@import", r"url\(\s*.?https?:", r"<iframe", r"<source[^>]+src=.https?:")
+for pattern in EXTERNAL:
+    found = re.search(pattern, site, re.IGNORECASE)
+    if found:
+        fail(f"The website must not load anything from other sites: found {found.group(0)!r}")
+if "https://github.com/krisnaparahita/Ai-tokenExplorer" not in site:
+    fail("Link the website to the GitHub repository")
+for needed in ("site/demo/index.html", "site/demo/prompt.html", "site/assets/report-preview.png", ".github/workflows/pages.yml", ".github/CODEOWNERS"):
+    if not (ROOT / needed).is_file():
+        fail(f"Add {needed}")
+pages = read(ROOT / ".github" / "workflows" / "pages.yml")
+if "workflow_dispatch" not in pages or re.search(r"(?m)^\s+push:", pages):
+    fail("Publish the website only by a manual run: pages.yml must use workflow_dispatch and no push trigger")
+for demo in ("site/demo/index.html", "site/demo/prompt.html"):
+    if "fabricated data" not in read(ROOT / demo):
+        fail(f"Label {demo} as fabricated demo data")
+
 # --- scripts compile ---------------------------------------------------------
 for script in sorted((ROOT / "scripts").glob("*.py")):
     try:

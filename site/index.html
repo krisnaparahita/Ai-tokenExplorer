@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Token Explorer: see where your AI tokens go, in plain English</title>
+<meta name="description" content="Token Explorer reads the usage logs Claude Code and Codex already keep on your computer and explains what happened in plain English. Open source. Runs locally.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Token Explorer: see where your AI tokens go, in plain English">
+<meta property="og:description" content="Ask how much AI you used last week, which conversation was heaviest, and why. Open source. Runs on your computer.">
+<meta property="og:image" content="https://krisnaparahita.github.io/Ai-tokenExplorer/assets/report-preview.png">
+<style>
+:root{color-scheme:light;--bg:#f9f9f7;--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#6b6963;--line:#e1e0d9;--blue:#2a78d6;--blue-ink:#1c5cab;--chip:#eef4fc;--orange:#eb6834;--on-blue:#fff}
+@media(prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#0d0d0d;--surface:#1a1a19;--ink:#fff;--ink2:#c3c2b7;--muted:#a19f97;--line:#2c2c2a;--blue:#3987e5;--blue-ink:#86b6ef;--chip:#20262e;--orange:#d95926;--on-blue:#0b0b0b}}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:18px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
+a{color:var(--blue-ink)}
+.wrap{max-width:1040px;margin:0 auto;padding:0 22px}
+.skip{position:absolute;left:-999px;top:8px;background:var(--surface);color:var(--ink);padding:8px 12px;border-radius:8px;border:1px solid var(--line)}
+.skip:focus{left:8px;z-index:10}
+:focus-visible{outline:3px solid var(--blue);outline-offset:3px;border-radius:6px}
+header.top{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:18px 0;flex-wrap:wrap}
+.brand{font-weight:800;font-size:19px;letter-spacing:-.01em;color:var(--ink);text-decoration:none}
+nav a{margin-left:18px;color:var(--ink2);text-decoration:none;font-size:16px}
+nav a:hover{color:var(--ink);text-decoration:underline}
+.hero{padding:44px 0 28px;text-align:center}
+.eyebrow{display:inline-block;font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--blue-ink);background:var(--chip);padding:6px 12px;border-radius:999px}
+h1{font-size:clamp(34px,6.4vw,62px);line-height:1.08;letter-spacing:-.025em;margin:18px auto 16px;max-width:15em}
+.lead{font-size:clamp(18px,2.4vw,22px);color:var(--ink2);max-width:36em;margin:0 auto}
+.cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:28px 0 12px}
+.btn{display:inline-block;padding:13px 22px;border-radius:12px;font-weight:700;font-size:17px;text-decoration:none;border:1px solid var(--line);color:var(--ink);background:var(--surface)}
+.btn.primary{background:var(--blue);color:var(--on-blue);border-color:var(--blue)}
+.btn:hover{filter:brightness(.94)}
+.note{font-size:15px;color:var(--muted)}
+figure.preview{margin:34px auto 0;max-width:900px}
+figure.preview img{width:100%;height:auto;display:block;border:1px solid var(--line);border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.14)}
+figure.preview figcaption{font-size:15px;color:var(--muted);margin-top:12px;text-align:center}
+section{padding:54px 0 6px}
+h2{font-size:clamp(26px,4vw,36px);line-height:1.15;letter-spacing:-.02em;margin:0 0 10px}
+.sub{color:var(--ink2);max-width:40em;margin:0 0 26px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:22px}
+.card h3{margin:0 0 6px;font-size:20px;line-height:1.25}
+.card p{margin:0;color:var(--ink2);font-size:16.5px}
+.num{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--chip);color:var(--blue-ink);font-weight:800;margin-bottom:10px}
+.asks{list-style:none;margin:0 0 14px;padding:0;display:grid;gap:10px}
+.asks li{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--blue);border-radius:12px;padding:12px 16px;font-size:17px}
+.split{display:grid;grid-template-columns:1.1fr 1fr;gap:26px;align-items:center}
+@media(max-width:760px){.split{grid-template-columns:1fr}nav a{margin-left:12px}}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:24px}
+.stat b{display:block;font-size:clamp(38px,7vw,58px);line-height:1;letter-spacing:-.02em}
+.stat span{color:var(--ink2)}
+.bar{display:flex;height:22px;border-radius:8px;overflow:hidden;margin:16px 0 8px;gap:2px}
+.bar i{display:block}
+.bar .old{flex:92;background:#9ec5f4}.bar .new{flex:8;background:var(--blue)}
+.legend{font-size:14.5px;color:var(--muted);display:flex;gap:18px;flex-wrap:wrap}
+pre{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;overflow:auto;font:15px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin:8px 0 14px;position:relative}
+pre[data-copy]{padding-right:84px}
+pre .copy{position:absolute;top:8px;right:8px;font:13px system-ui,sans-serif;padding:4px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink2);cursor:pointer}
+.tabs h3{margin:18px 0 0;font-size:18px}
+.tabs p{margin:2px 0 0;color:var(--ink2);font-size:16px}
+.cant{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px 24px}
+.cant ul{margin:8px 0 0;padding-left:20px;color:var(--ink2)}
+.cant li{margin:6px 0}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px;margin:10px 0}
+summary{cursor:pointer;font-weight:700}
+details p{margin:10px 0 0;color:var(--ink2);font-size:16.5px}
+footer{margin-top:64px;padding:28px 0 46px;border-top:1px solid var(--line);color:var(--muted);font-size:15px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="#top">Token Explorer</a>
+    <nav aria-label="Main">
+      <a href="demo/">Demo</a><a href="#install">Install</a><a href="#faq">FAQ</a><a href="https://github.com/krisnaparahita/Ai-tokenExplorer">GitHub</a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <div class="hero" id="top">
+      <span class="eyebrow">Open source · Runs on your computer</span>
+      <h1>See where your AI tokens go, in plain English.</h1>
+      <p class="lead">Token Explorer reads the usage records Claude Code and Codex already keep on your computer, then explains what happened: what was heaviest, who did the work, and why. Ask a question, or open one page anyone can read.</p>
+      <div class="cta">
+        <a class="btn primary" href="demo/">See a live demo report</a>
+        <a class="btn" href="#install">Install in a minute</a>
+        <a class="btn" href="https://github.com/krisnaparahita/Ai-tokenExplorer">View on GitHub</a>
+      </div>
+      <p class="note">Works with Claude Code, Codex, or both. Nothing is uploaded.</p>
+      <figure class="preview">
+        <a href="demo/"><img src="assets/report-preview.png" width="1000" height="980" alt="Top of a Token Explorer report titled 'Your AI week in review', showing 42.4 million tokens processed, four highlight cards and four summary numbers."></a>
+        <figcaption>A week in review, built from fabricated demo data. <a href="demo/">Open the full demo</a>.</figcaption>
+      </figure>
+    </div>
+
+    <section aria-labelledby="why">
+      <h2 id="why">Made for people who don't read logs</h2>
+      <p class="sub">Other trackers are built for developers, with terminals and dashboards. Token Explorer is built to be understood by anyone who uses AI and wants to know where it went.</p>
+      <div class="grid">
+        <div class="card"><h3>Every number is explained</h3><p>Each figure comes with an everyday comparison, such as "about 212 books of text", and the page opens with a headline that fits the period: a day, a week or a month in review.</p></div>
+        <div class="card"><h3>It says how sure it is</h3><p>Links between sessions are marked exact or inferred. Explanations are marked "possible, not proven". No prices ship with the tool, so it never shows a dollar figure it can't stand behind.</p></div>
+        <div class="card"><h3>Private by design</h3><p>The collector and the report make no network requests. There is no server, no account and no upload. Your logs are read where they already are.</p></div>
+      </div>
+    </section>
+
+    <section aria-labelledby="ask">
+      <h2 id="ask">Ask in plain words</h2>
+      <p class="sub">Use it as a skill inside your assistant, then talk to it like a person. It tells you the exact time range it used, every time.</p>
+      <ul class="asks">
+        <li>How much AI did I use last week?</li>
+        <li>What were my top conversations from the last 7 days?</li>
+        <li>Why was my most expensive prompt so big?</li>
+        <li>Make me a report I can look at.</li>
+      </ul>
+      <p class="note">Periods it understands: today, yesterday, the last day, last 3 days, this or last week, this or last month, and exact date ranges.</p>
+    </section>
+
+    <section aria-labelledby="prompt">
+      <h2 id="prompt">One prompt, taken apart</h2>
+      <div class="split">
+        <div>
+          <p class="sub" style="margin-bottom:12px">Big totals rarely come from big requests. Every step re-reads the conversation so far, so a long conversation gets heavy even when little new text is written. Token Explorer shows that for any single prompt, with a step-by-step chart.</p>
+          <p><a href="demo/prompt.html">Open the one-prompt demo</a></p>
+        </div>
+        <div class="stat" role="group" aria-label="Demo example: how one prompt's tokens split">
+          <b>18 million</b>
+          <span>tokens for one "yes please" in the demo, over 100 steps</span>
+          <div class="bar" aria-hidden="true"><i class="old"></i><i class="new"></i></div>
+          <div class="legend"><span>92% earlier conversation re-read</span><span>8% new text</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="how">
+      <h2 id="how">How it works</h2>
+      <div class="grid">
+        <div class="card"><span class="num" aria-hidden="true">1</span><h3>Install once</h3><p>One command adds the skill to Claude Code, Codex or both.</p></div>
+        <div class="card"><span class="num" aria-hidden="true">2</span><h3>Ask a question</h3><p>It reads the usage logs your tools already keep, joins helpers and hand-offs back to the prompt that caused them, and answers.</p></div>
+        <div class="card"><span class="num" aria-hidden="true">3</span><h3>Read the page</h3><p>Open a single HTML file. It works offline, in light or dark mode, and every chart has a table view.</p></div>
+      </div>
+    </section>
+
+    <section id="install" aria-labelledby="install-h">
+      <h2 id="install-h">Install</h2>
+      <p class="sub">Python 3.9 or newer, no other packages. Pick the way that suits you.</p>
+      <div class="tabs">
+        <h3>Any agent that supports skills</h3>
+        <pre data-copy>npx skills add krisnaparahita/Ai-tokenExplorer --global</pre>
+        <h3>Claude Code plugin</h3>
+        <pre data-copy>/plugin marketplace add krisnaparahita/Ai-tokenExplorer
+/plugin install token-audit@token-audit</pre>
+        <h3>From a clone, for the tool you use</h3>
+        <pre data-copy>git clone https://github.com/krisnaparahita/Ai-tokenExplorer.git
+cd Ai-tokenExplorer
+python3 scripts/install.py --target codex    # or: claude, or leave off for both</pre>
+        <p>Then ask: <code>/token-audit how much AI did I use last week?</code> In Codex, use <code>$token-audit</code>.</p>
+      </div>
+    </section>
+
+    <section aria-labelledby="cant">
+      <h2 id="cant">What it can't see</h2>
+      <div class="cant">
+        <p style="margin:0;color:var(--ink2)">It is honest about its limits, and so are we.</p>
+        <ul>
+          <li>Only work that was written to log files on your computer. Chats in a browser or phone app, and cloud-only tools, leave nothing to read.</li>
+          <li>Chat apps that run uploaded skills in a cloud sandbox usually can't see the folders on your computer. Use Claude Code or Codex for automatic collection.</li>
+          <li>Tokens are processed work, not dollars and not your plan's allowance.</li>
+          <li>Hand-offs between tools are matched by wording and timing, so they are labelled inferred.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="faq" aria-labelledby="faq-h">
+      <h2 id="faq-h">Questions</h2>
+      <details><summary>Does it show what I spent in dollars?</summary><p>Not by default. Prices change and depend on your plan, so none ship with the tool. If you give it a price list you trust, with the date you checked it, it adds a labelled estimate.</p></details>
+      <details><summary>Does anything leave my computer?</summary><p>The collector and the report make no network requests. If you ask your assistant to explain a report, that uses the assistant's normal tokens like any other question.</p></details>
+      <details><summary>Which tools does it read?</summary><p>Claude Code and Codex natively, either alone or together. Any other tool that writes per-request usage to a local folder can be added through a small import format.</p></details>
+      <details><summary>I'm not technical. Can I use it?</summary><p>The reading part is built for you. Installing still takes one command in a terminal, or you can ask Claude Code or Codex to install it for you. A one-click installer isn't built yet.</p></details>
+      <details><summary>Isn't there already a tool for this?</summary><p>Yes, several, and some are excellent: ccusage and CodeBurn cover many more tools and show dollars. Token Explorer is aimed at explaining usage to people who don't read logs. <a href="https://github.com/krisnaparahita/Ai-tokenExplorer#compared-with-similar-tools">Read the honest comparison</a>.</p></details>
+    </section>
+  </main>
+
+  <footer>
+    <span>MIT licensed · <a href="https://github.com/krisnaparahita/Ai-tokenExplorer">Source on GitHub</a></span>
+    <span>Made by <a href="https://github.com/krisnaparahita">@krisnaparahita</a></span>
+  </footer>
+</div>
+<script>
+document.querySelectorAll('pre[data-copy]').forEach(function (pre) {
+  var button = document.createElement('button');
+  button.type = 'button'; button.className = 'copy'; button.textContent = 'Copy';
+  button.addEventListener('click', function () {
+    var text = pre.firstChild.textContent;
+    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(function () {
+      button.textContent = 'Copied'; setTimeout(function () { button.textContent = 'Copy'; }, 1600);
+    }, function () { button.textContent = 'Select and copy'; });
+  });
+  pre.appendChild(button);
+});
+</script>
+</body>
+</html>
