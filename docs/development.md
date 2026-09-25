@@ -3,7 +3,7 @@
 The runtime uses Python's standard library. Run from the repository root:
 
 ```sh
-python3 -m unittest discover -s token-audit/tests -v
+python3 -m unittest discover -s tests -v
 ```
 
 Tests cover duplicate usage records, streaming snapshots, cache/reasoning subsets, tool-result prompt boundaries, legacy counter resets, estimated imports, malformed records, missing usage, query filtering, ambiguous call IDs, and transcript character inventory.

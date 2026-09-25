@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "token-audit",
+  "description": "See where your AI tokens go, in plain English: by period, conversation and prompt, for Claude Code and Codex.",
+  "version": "0.1.0",
+  "author": {
+    "name": "krisnaparahita",
+    "url": "https://github.com/krisnaparahita"
+  },
+  "homepage": "https://github.com/krisnaparahita/Ai-tokenExplorer",
+  "repository": "https://github.com/krisnaparahita/Ai-tokenExplorer",
+  "license": "MIT",
+  "keywords": ["tokens", "usage", "cost", "analytics", "claude-code", "codex"],
+  "skills": ["./"]
+}

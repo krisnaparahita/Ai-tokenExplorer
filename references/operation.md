@@ -3,7 +3,7 @@
 This folder is a portable Agent Skill. Copy it into the harness's supported skills directory. The included installer supports personal Codex (`$CODEX_HOME/skills/token-audit`) and Claude Code (`~/.claude/skills/token-audit`) discovery. It refuses to overwrite an existing installation. Restart the harness or start a fresh task if discovery is cached. Installation is not automatic skill execution on every turn.
 
 ```sh
-python3 token-audit/scripts/install.py
+python3 scripts/install.py
 ```
 
 Run the collector on demand, or leave this process running on any platform with Python 3.9+:
@@ -17,7 +17,7 @@ Ctrl-C stops foreground monitoring. Sources are rescanned at each interval, trad
 ## macOS background collector
 
 ```sh
-python3 token-audit/scripts/install.py --enable-monitor
+python3 scripts/install.py --enable-monitor
 ```
 
 This installs both skill copies, runs an initial snapshot, and registers `local.token-audit.collector` with launchd, scanning once every 60 seconds while logged in. It uses the current Python interpreter, so that interpreter must remain available. No LLM calls, paid APIs, telemetry servers, or network access are used. It captures only logs readable by that local process; new calls appear after the harness writes usage. It starts again at login. Sleep/logout pauses collection; the next scan reconstructs the available history.

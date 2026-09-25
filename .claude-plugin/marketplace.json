@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace-manifest.json",
+  "name": "token-audit",
+  "owner": {
+    "name": "krisnaparahita",
+    "url": "https://github.com/krisnaparahita"
+  },
+  "description": "Install Token Explorer as a Claude plugin.",
+  "plugins": [
+    {
+      "name": "token-audit",
+      "source": "./",
+      "description": "See where your AI tokens go, in plain English: by period, conversation and prompt, for Claude Code and Codex.",
+      "license": "MIT",
+      "keywords": ["tokens", "usage", "cost", "analytics", "claude-code", "codex"]
+    }
+  ]
+}

@@ -1,6 +1,9 @@
 ---
 name: token-audit
 description: Track and audit token usage by time period (last day, last N days, last week, last month, exact dates), by conversation, by prompt, and by model call, and deep-dive any single prompt. Use for token budgets, expensive prompts, usage reports, plain-language usage pages, and ongoing local tracking in Codex, Claude Code, or other harnesses with usage exports.
+license: MIT
+metadata:
+  version: "0.1.0"
 ---
 
 # Token Audit

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Token Explorer"
+  short_description: "See where your AI tokens go, in plain English"
+  default_prompt: "Use $token-audit to show my AI usage for the last week in plain English and name my top conversations."
