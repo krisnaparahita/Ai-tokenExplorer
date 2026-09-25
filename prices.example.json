@@ -1,0 +1,10 @@
+{
+  "_note": "PLACEHOLDER ZEROS. Copy this file, replace every rate with the current figure from your provider's pricing page, and set as_of to the date you checked. Token Explorer never ships or guesses prices.",
+  "currency": "USD",
+  "as_of": "YYYY-MM-DD",
+  "source": "where you got these numbers",
+  "models": [
+    {"match": "claude-sonnet", "input_per_million": 0, "output_per_million": 0, "cache_read_per_million": 0, "cache_write_per_million": 0},
+    {"match": "gpt-", "input_per_million": 0, "output_per_million": 0, "cache_read_per_million": 0}
+  ]
+}

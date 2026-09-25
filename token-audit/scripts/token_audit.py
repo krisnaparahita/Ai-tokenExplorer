@@ -6,8 +6,13 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import sys
 import tempfile
 import time
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import html_report  # noqa: E402
+import linking  # noqa: E402
 
 FIELDS = ('input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens')
 
@@ -66,10 +71,12 @@ def read_records(path, warnings):
     return result
 
 
-def parse(path, kind, warnings):
+def parse(path, kind, warnings, meta=None):
+    meta = meta if meta is not None else linking.new_meta()
     records = read_records(path, warnings)
     modern = any(x.get('type') == 'token_usage_record' for _, x in records)
     sid, turn, model, label = str(path), 'unattributed', 'unknown', ''
+    node = None
     prompt_no, previous = 0, None
     result = []
     if modern and any(x.get('type') == 'event_msg' and x.get('payload', {}).get('type') == 'token_count' for _, x in records):
@@ -81,16 +88,24 @@ def parse(path, kind, warnings):
         if kind == 'codex':
             if typ == 'session_meta':
                 sid = p.get('id', p.get('session_id', sid))
+                linking.note_codex_meta(meta, sid, p, x.get('timestamp'))
             if typ == 'turn_context':
                 new_turn = p.get('turn_id', turn)
                 if new_turn != turn:
                     label = ''
+                    linking.note_turn(meta, 'codex', sid, x.get('timestamp'), new_turn)
                 turn, model = new_turn, p.get('model', model)
+            if typ == 'response_item' and p.get('type') in ('function_call', 'custom_tool_call'):
+                linking.note_codex_call(meta, sid, turn, x.get('timestamp'), p.get('call_id'), str(p.get('name', '')), str(p.get('arguments') or p.get('input') or ''))
+            if typ == 'response_item' and p.get('type') in ('function_call_output', 'custom_tool_call_output'):
+                linking.note_result(meta, p.get('call_id'), x.get('timestamp'))
             if typ == 'response_item' and p.get('role') == 'user':
+                linking.note_codex_user(meta, sid, text_content(p.get('content')))
                 new = prompt_label(text_content(p.get('content')))
                 if new:
                     label = new
             if typ == 'event_msg' and p.get('type') == 'user_message':
+                linking.note_codex_user(meta, sid, str(p.get('message', '')))
                 label = prompt_label(p.get('message', '')) or label
                 if turn == 'unattributed' or str(turn).startswith('prompt-'):
                     prompt_no += 1
@@ -128,13 +143,18 @@ def parse(path, kind, warnings):
             msg = x.get('message', {})
             if not isinstance(msg, dict):
                 continue
+            sidechain = bool(x.get('isSidechain') and x.get('agentId'))
+            node = f"{sid}#{x['agentId']}" if sidechain else sid
+            linking.note_claude(meta, node, sidechain, x.get('agentId'), x, msg, x.get('timestamp'), turn)
             if typ == 'user':
                 content = msg.get('content', [])
                 tool_result = isinstance(content, list) and any(isinstance(c, dict) and c.get('type') == 'tool_result' for c in content)
                 if not tool_result and not x.get('isMeta'):
                     new = prompt_label(text_content(content))
+                    linking.note_claude_user(meta, node, text_content(content))
                     if new:
                         turn, label = x.get('uuid', f'{sid}:{line}'), new
+                        linking.note_turn(meta, 'claude', node, x.get('timestamp'), turn)
             if typ != 'assistant' or not isinstance(msg.get('usage'), dict):
                 continue
             u, model = msg['usage'], msg.get('model', 'unknown')
@@ -167,7 +187,7 @@ def parse(path, kind, warnings):
             continue
         result.append(dict(harness=x.get('harness', 'import') if kind == 'import' else kind,
                            event_id=str(event_id), session_id=str(sid), turn_id=str(event_turn),
-                           model=model, prompt_label=label, timestamp=x.get('timestamp'),
+                           model=model, prompt_label=label, timestamp=x.get('timestamp'), node=(node if kind == 'claude' else sid),
                            stage=x.get('stage', 'unattributed') if kind == 'import' else 'unattributed',
                            measurement=confidence, total_tokens=total, source=str(path), source_line=line, **norm))
     if records and not result:
@@ -176,7 +196,7 @@ def parse(path, kind, warnings):
 
 
 def collect(roots):
-    warnings, unique, files = set(), {}, 0
+    warnings, unique, files, meta = set(), {}, 0, linking.new_meta()
     for kind, root in roots:
         root = Path(root).expanduser()
         if not root.exists():
@@ -185,7 +205,7 @@ def collect(roots):
         paths = sorted(root.rglob('*.jsonl')) if root.is_dir() else [root]
         for path in paths:
             files += 1
-            for row in parse(path, kind, warnings):
+            for row in parse(path, kind, warnings, meta):
                 # Response IDs survive transcript copies, resumes and repeated stream chunks.
                 key = (row['harness'], row['event_id'])
                 old = unique.get(key)
@@ -198,7 +218,8 @@ def collect(roots):
                     if not row['prompt_label']:
                         row['prompt_label'] = old['prompt_label']
                 unique[key] = row
-    return list(unique.values()), sorted(warnings), files
+    rows = linking.link(list(unique.values()), meta)
+    return rows, sorted(warnings), files
 
 
 def atomic(path, content):
@@ -213,7 +234,7 @@ def atomic(path, content):
             os.unlink(tmp)
 
 
-def report(rows, warnings, files, out, include_prompts=False):
+def report(rows, warnings, files, out, include_prompts=False, html_out=False, prices_path=None):
     if not include_prompts:
         rows = [dict(r, prompt_label=hashlib.sha256(r['prompt_label'].encode()).hexdigest()[:12] if r['prompt_label'] else '') for r in rows]
     measured = [r for r in rows if r['measurement'] != 'estimated']
@@ -240,8 +261,29 @@ def report(rows, warnings, files, out, include_prompts=False):
         lines += ['- Additional warnings are in coverage.json.']
     atomic(out / 'ledger.jsonl', ''.join(json.dumps(r, ensure_ascii=False) + '\n' for r in rows))
     atomic(out / 'report.md', '\n'.join(lines) + '\n')
-    atomic(out / 'coverage.json', json.dumps({'files': files, 'measured_events': len(measured), 'estimated_events': len(estimated), 'measured_tokens': total, 'warnings': warnings}, indent=2))
+    coverage = {'files': files, 'measured_events': len(measured), 'estimated_events': len(estimated), 'measured_tokens': total, 'warnings': warnings}
+    atomic(out / 'coverage.json', json.dumps(coverage, indent=2))
+    if html_out:
+        try:
+            prices = html_report.load_prices(prices_path.expanduser()) if prices_path else None
+            atomic(out / 'report.html', html_report.render(html_report.build_model(rows, coverage, prices)))
+        except Exception as e:  # the ledger is the product; a report failure must not lose it
+            print(f'report.html skipped: {type(e).__name__}: {e}', flush=True)
     return total
+
+
+def default_roots():
+    """Look in the usual places; a tool that is not installed here is simply skipped, not an error."""
+    candidates = [('codex', Path(os.environ.get('CODEX_HOME', Path.home() / '.codex')) / 'sessions'), ('claude', Path.home() / '.claude/projects')]
+    roots = [c for c in candidates if c[1].exists()] or candidates
+    # Claude desktop app sessions that run Claude Code keep transcripts in the app's data folder.
+    # Locations differ by OS and are added only if they exist; unverified on every platform.
+    home, appdata = Path.home(), os.environ.get('APPDATA')
+    for base in (home / 'Library/Application Support/Claude', Path(appdata) / 'Claude' if appdata else None, home / '.config/Claude'):
+        candidate = base / 'local-agent-mode-sessions' if base else None
+        if candidate and candidate.exists():
+            roots.append(('claude', candidate))
+    return roots
 
 
 def main():
@@ -251,17 +293,19 @@ def main():
     ap.add_argument('--import-jsonl', action='append', default=[], metavar='PATH')
     ap.add_argument('--out', type=Path, default=Path.cwd() / 'token-audit-output')
     ap.add_argument('--include-prompts', action='store_true', help='Store up to 160 characters of each prompt locally instead of its hash')
+    ap.add_argument('--prices', type=Path, metavar='PATH', help='Optional JSON price list; adds a labelled cost estimate to report.html')
+    ap.add_argument('--no-html', action='store_true', help='Skip writing the plain-language report.html')
     ap.add_argument('--watch', type=int, metavar='SECONDS', help='Rescan while this process is running; minimum 10 seconds')
     args = ap.parse_args()
     if args.watch is not None and args.watch < 10:
         ap.error('--watch must be at least 10')
     roots = [(kind, p) for kind, paths in [('codex', args.codex), ('claude', args.claude), ('import', args.import_jsonl)] for p in paths]
     if not roots:
-        roots = [('codex', Path(os.environ.get('CODEX_HOME', Path.home() / '.codex')) / 'sessions'), ('claude', Path.home() / '.claude/projects')]
+        roots = default_roots()
     try:
         while True:
             rows, warnings, files = collect(roots)
-            total = report(rows, warnings, files, args.out.expanduser(), args.include_prompts)
+            total = report(rows, warnings, files, args.out.expanduser(), args.include_prompts, html_out=not args.no_html, prices_path=args.prices)
             print(f'{len(rows)} events; {total:,} measured tokens; {len(warnings)} coverage warnings. {args.out / "report.md"}', flush=True)
             if not args.watch:
                 break

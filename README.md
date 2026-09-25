@@ -4,7 +4,7 @@
 
 Token Explorer is a portable AI skill and a local usage collector for people who want to understand the work behind an AI conversation: which prompts trigger the most processing, how much input is reused from cache, how much output is generated, and which calls deserve a closer look.
 
-It includes native adapters for **Codex** and **Claude Code**, plus a common import format for other models and harnesses. The skill is named **`token-audit`** so the same invocation works across installations.
+It includes native adapters for **Codex** and **Claude Code**, plus a common import format for other models and harnesses. Install it in Codex, in Claude Code, or in both: each works on its own, whichever tool you use, and nothing requires that your tools hand work to each other. If they do (Claude calling Codex, or Codex calling Claude), that work is traced back to the task that caused it. The skill is named **`token-audit`** so the same invocation works across installations.
 
 The collector and command-line reports run locally, make no network requests, and consume no model tokens. Asking an AI to interpret those reports uses that AI's normal tokens.
 
@@ -21,6 +21,64 @@ The collector and command-line reports run locally, make no network requests, an
 | Which model requests were largest? | `calls --top 5` |
 | What happened inside one expensive call? | `inspect CALL_ID --context` |
 | Was research or testing more expensive? | `summary --group-by stage`, when your exporter supplies stage labels |
+
+## See it, in plain English
+
+Every scan also writes **`report.html`** next to the ledger: one self-contained page (no internet, no install, opens in any browser, light and dark mode) written for people who have never heard the word "token".
+
+- A headline number with an everyday comparison ("about 4,000 pages of text").
+- **Where did the effort go?** Fresh reading, reused-from-memory and writing, in one bar.
+- **Who did the work?** Your own conversations versus helpers, hand-offs to other AIs, and automatic safety checks.
+- **A headline that fits the period** ("Your AI week in review", day, month) and a highlights strip: busiest day, heaviest prompt, top conversation, most-used model.
+- **Which conversations used the most?** The top five, named by how they began, with the helpers each one started included.
+- **Which tasks were the heaviest?** Ranked, rated *Light / Typical / Heavy / Very heavy / Extreme* against **your own** typical task, with a *Simple / Multi-step / Team effort* label. Tap one to see what happened inside.
+- **When were you busiest?**, **which tools and models**, and an honest "what this page cannot see".
+- Every chart has a table view and a hover explanation; nothing depends on colour alone.
+
+```sh
+open "$HOME/.local/share/token-audit/report.html"     # macOS; use xdg-open on Linux
+python3 token-audit/scripts/html_report.py --ledger ~/.local/share/token-audit/ledger.jsonl --period last-week
+```
+
+It takes the same filters as the query tool: `--period last-week`, `--period 7d`, `--session ID`, `--harness codex`. For one prompt, `--task TASK_ID` builds a page that takes it apart step by step (see below). The page may contain snippets of your prompts (if you collected with `--include-prompts`), so check it before sharing.
+
+## Choose a period, a session or one prompt
+
+```sh
+token-audit summary  --period last-day          # rolling 24 hours
+token-audit summary  --period 7d                # rolling week; also 3d, 14d, 12h
+token-audit summary  --period last-week         # the previous Monday to Sunday
+token-audit summary  --period last-month        # the previous calendar month
+token-audit summary  --period 2026-09-01..2026-09-07
+token-audit sessions --period 7d                # conversations, biggest first
+token-audit summary  --session SESSION_ID       # just that conversation, helpers included
+token-audit prompts  --period last-week --search "invoice"
+token-audit deep-dive TASK_ID --full-prompt     # one prompt, taken apart
+```
+
+Periods use your computer's local time zone and every answer states the exact range it covered. `week` and `month` on their own are rejected because they are ambiguous; use `7d` for a rolling week or `last-week` for the previous calendar week. A **prompt** means one message you sent plus everything it caused, including helpers, hand-offs and safety checks. `deep-dive` shows totals, the effort split, how the conversation grew, every helper and how it was linked, the largest steps, each step in order, and observations that are labelled as **fact** or **possible explanation**. It never claims a specific file or result "cost" a specific number of tokens. `--full-prompt` reads the complete prompt from your transcript and is opt-in because it is more private.
+
+## Helpers, hand-offs and safety checks
+
+Modern assistants start other AI sessions to do part of a job. Those sessions cost tokens but appear in separate log files, so most trackers show them as unrelated activity. Token Explorer joins them back to the task that caused them, and says how sure it is:
+
+| Link | How it is established | Confidence |
+|---|---|---|
+| Claude sub-agent to the task that started it | The `agentId` recorded on the Agent/Task tool result | Exact |
+| Codex helper or automatic safety review to its parent | The `parent_thread_id` Codex writes itself | Exact |
+| One AI tool starting another (Claude to Codex, or Codex to Claude), through an MCP tool or a shell command such as `codex exec` or `claude -p` | The other tool's session began while the call was running and its first message is that call's prompt | **Inferred**; shown as such |
+
+Anything that does not meet these rules stays its own task. Nothing else is guessed. A Codex session started directly from a terminal, or one whose parent Claude transcript was never saved (for example runs with `--no-session-persistence`), correctly stays unlinked.
+
+## Optional cost estimate
+
+Prices change and depend on your plan, so Token Explorer never ships or guesses them. To get a labelled *estimate*, copy `prices.example.json`, fill in the current rates from your provider's pricing page (per million tokens, with the date you checked), and run:
+
+```sh
+python3 token-audit/scripts/token_audit.py --out "$HOME/.local/share/token-audit" --prices my-prices.json
+```
+
+The report then shows an estimated total and per-task figure. Models with no matching entry are listed as not priced instead of being silently treated as free.
 
 ## How it works
 
@@ -56,18 +114,22 @@ cd Ai-tokenExplorer
 
 ### 2. Install the AI skill
 
-Install personal copies for both Codex and Claude Code:
+Install a personal copy for the tool you use:
 
 ```sh
-python3 token-audit/scripts/install.py
+python3 token-audit/scripts/install.py --target codex    # Codex only
+python3 token-audit/scripts/install.py --target claude   # Claude Code only
+python3 token-audit/scripts/install.py                   # both (default)
 ```
 
-The installer copies `token-audit/` into:
+The collector reads whichever tool logs exist on your machine, so a Codex-only or Claude-only user gets a complete report, and installing for one tool never blocks installing for the other later.
+
+The installer copies `token-audit/` into the folders of the tools you chose:
 
 - Codex: `$CODEX_HOME/skills/token-audit`, falling back to `~/.codex/skills/token-audit`.
 - Claude Code: `~/.claude/skills/token-audit`.
 
-It refuses to overwrite an existing installation. For an upgrade, compare and back up any local changes before replacing the skill folder with the new version. Running `git pull` updates the checkout, not previously installed copies. The installer does not change shell startup files, harness instructions, credentials, or hooks.
+It refuses to overwrite an existing installation of the same tool. For an upgrade, compare and back up any local changes before replacing the skill folder with the new version. Running `git pull` updates the checkout, not previously installed copies. The installer does not change shell startup files, harness instructions, credentials, or hooks.
 
 For a single harness, manually copy only `token-audit/` into that harness's skill directory. For another Agent Skills-compatible harness, use its documented skill location. If discovery is cached, restart the harness or open a new task.
 
@@ -220,7 +282,8 @@ token-audit categories --ledger /path/to/ledger.jsonl
 |---|---|
 | `--harness NAME` | Exact harness filter, e.g. `codex`, `claude`, or an imported harness name |
 | `--session ID` | Exact conversation/session filter |
-| `--since DATE` | Inclusive ISO-8601 date or timestamp; date-only means UTC midnight |
+| `--since DATE` / `--until DATE` | ISO-8601 range in UTC (`--until` is exclusive); date-only means 00:00 UTC |
+| `--period NAME` | Named local-time period such as `last-day`, `7d`, `last-week`, `last-month`, or `2026-09-01..2026-09-07`; not combinable with `--since/--until` |
 | `--ledger PATH` | Read another snapshot; default is `~/.local/share/token-audit/ledger.jsonl` |
 | `--top N` | Maximum ranked results; default 10 |
 | `--group-by FIELD` | Summary grouping field |
@@ -244,6 +307,8 @@ python3 token-audit/scripts/token_audit.py \
 | `--import-jsonl PATH` | Read compatible request-level exports; repeatable |
 | `--out PATH` | Output directory; default `./token-audit-output` |
 | `--include-prompts` | Store short local prompt snippets instead of hashes |
+| `--prices PATH` | Optional price list; adds a labelled cost estimate to `report.html` |
+| `--no-html` | Skip writing `report.html` |
 | `--watch SECONDS` | Rescan until stopped; minimum 10 seconds |
 
 Once an explicit source is supplied, **only explicit sources are scanned**. Include an extra `--codex` path for archived sessions. Do not place generated outputs inside source directories or import the generated ledger as an export.
@@ -264,6 +329,10 @@ The example has 2 measured calls and **14,000 processed tokens**, plus one estim
 
 ## Other models and harnesses
 
+Anything that writes usage to a local folder can be tracked. Point `--import-jsonl` at a **file or a whole folder** of `token-audit/v1` records (see the adapter contract below) and it appears alongside Claude and Codex in every view. Tools that only run in the cloud, with no local log, cannot be measured by a local collector.
+
+**Claude desktop app.** Claude Code sessions, whether started from the terminal or from the desktop app, write the same transcripts under `~/.claude/projects`. On macOS, Windows and Linux the collector also scans the desktop app's `local-agent-mode-sessions` folder when it exists. Those folder locations are **not verified on every platform**; if yours differs, add it explicitly with `--claude PATH`. Plain chat in the desktop app is not written to a usage log and cannot be measured.
+
 A model does not need to be named in this project. It needs a harness that exposes per-request usage, stable request IDs, and enough metadata for attribution. Export those records as `token-audit/v1` with `usage_kind` set to `openai`, `anthropic`, or `canonical`.
 
 See the [adapter contract](token-audit/references/adapters.md) and [synthetic export](examples/demo.jsonl). For research/testing/planning categories, attach explicit `stage` labels to each request. Map other provider counters only after checking their accounting semantics.
@@ -277,10 +346,10 @@ This project does not install browser extensions, intercept network traffic, con
 - Mixed Codex formats prefer modern records and can omit legacy-only portions of the history.
 - Claude repeated stream records are coalesced by identity, keeping the largest observed counters. This assumes monotonic streaming usage.
 - Claude and legacy prompt attribution is positional and can be ambiguous with steering, branching, or copied history.
-- Child sessions are counted separately when their logs exist; the tool does not build a parent-child attribution graph.
+- Child sessions are counted once, under their own session, and are linked to the task that started them when the rules in *Helpers, hand-offs and safety checks* apply. Claude to Codex hand-offs are inferred, not certain, and are labelled that way.
 - Unlogged retries, remote workers, hidden provider activity, and still-running responses remain gaps.
 - Tokenization differs across providers. Token volume is not a provider-independent measure of work, money, or quality.
-- Costs and subscription allowance percentages are intentionally not inferred.
+- Costs are shown only when you supply your own dated price list, and are always labelled as estimates. Subscription allowance percentages are never inferred.
 
 ## Local data and privacy
 
@@ -305,6 +374,7 @@ Remove that exact plist to prevent startup at the next login. Installed skill fo
 ```text
 Ai-tokenExplorer/
 ├── README.md
+├── prices.example.json             Placeholder price list (fill in yourself)
 ├── .gitignore
 ├── docs/
 │   └── development.md
@@ -318,6 +388,10 @@ Ai-tokenExplorer/
     ├── scripts/
     │   ├── install.py              Skill installation and optional launchd setup
     │   ├── token_audit.py          Parsing, normalization, deduplication, reporting
+    │   ├── linking.py              Parent/child session linking and task roll-ups
+    │   ├── html_report.py          Plain-language HTML report and one-prompt page
+    │   ├── periods.py              Named time periods (last day, last week, ...)
+    │   ├── deepdive.py             Per-prompt analysis and observations
     │   └── query.py                Read-only summaries and call inspection
     └── tests/                     Accounting and query regression tests
 ```
