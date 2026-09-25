@@ -59,3 +59,26 @@ Rules to preserve when changing it: never link on prompt text alone (time window
 ## Periods and deep-dive: `periods.py`, `deepdive.py`
 
 `periods.resolve` turns a name into a half-open `[start, end)` interval in local time plus a label; keep the ambiguity rule (no bare `week` or `month`) and always echo the resolved range in output. `deepdive.summarize_prompts` groups rows by `task_id`; `deepdive.build` produces the per-prompt breakdown used by both `query.py deep-dive` and `html_report.py --task`. Observations are `fact` or `hypothesis`; add new ones only if they are computed from measured counters, and label anything explanatory as a hypothesis. Sessions are rolled up by `task_root`, so `--session` includes the helpers and Codex hand-offs a conversation started.
+
+## Website and demo
+
+`site/index.html` is one static page: inline CSS, a few lines of JavaScript for the copy buttons, no external requests. `site/demo/` holds two pages built from fabricated data, and `site/assets/report-preview.png` is a crop of the demo report.
+
+Rebuild the demo after changing the report (use `TZ=UTC` so dates do not depend on your machine):
+
+```sh
+python3 scripts/make-demo-ledger.py --out /tmp/demo/ledger.jsonl
+BANNER="Demo with fabricated data. Nothing on this page comes from a real conversation."
+TZ=UTC python3 scripts/html_report.py --ledger /tmp/demo/ledger.jsonl --period 2026-09-08..2026-09-14 --banner "$BANNER" --out site/demo/index.html
+TZ=UTC python3 scripts/html_report.py --ledger /tmp/demo/ledger.jsonl --task TASK_ID --banner "$BANNER" --out site/demo/prompt.html
+```
+
+Take `TASK_ID` from `python3 scripts/query.py prompts --ledger /tmp/demo/ledger.jsonl --top 1`. Regenerate `report-preview.png` from the top 980 pixels of `site/demo/index.html` at 1000 pixels wide.
+
+### Publishing
+
+Publishing makes the site public, so it is a manual step: in the repo settings under Pages, set Source to "GitHub Actions", then run the "Publish website" workflow from the Actions tab. The address is `https://<owner>.github.io/<repo>/`. The `og:image` address in `site/index.html` assumes that default.
+
+### Who can merge
+
+`main` is protected: changes need a pull request, the three CI checks (`tests (3.9)`, `tests (3.12)`, `package`) must pass, conversations must be resolved, and force pushes and deletion are blocked. Only people with write access can merge; the owner is the only collaborator. If a check is renamed in `validate.yml`, update the required checks in the branch protection settings or pull requests will wait forever.

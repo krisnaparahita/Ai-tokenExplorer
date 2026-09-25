@@ -400,6 +400,7 @@ Ai-tokenExplorer/
 ├── LICENSE
 ├── prices.example.json          Placeholder price list (fill in yourself)
 ├── .claude-plugin/              Claude plugin and marketplace manifests
+├── site/                        One-page website, demo reports and preview image
 ├── agents/openai.yaml           Display name and default prompt for OpenAI-compatible agents
 ├── scripts/
 │   ├── token_audit.py           Parsing, normalization, deduplication, reporting
@@ -409,12 +410,13 @@ Ai-tokenExplorer/
 │   ├── query.py                 Read-only summaries, sessions, prompts, deep-dive
 │   ├── html_report.py           Plain-language HTML report and one-prompt page
 │   ├── install.py               Skill installation and optional macOS collector
+│   ├── make-demo-ledger.py      Fabricated demo data for the website
 │   └── validate-package.py      Package checks used by CI
 ├── references/                  Adapter contract and operating notes
 ├── examples/demo.jsonl          Fabricated cross-provider usage
 ├── docs/development.md          Internal functions and test commands
 ├── tests/                       Accounting, linking, periods, report and install tests
-└── .github/workflows/validate.yml
+└── .github/                     CI, manual website publishing, CODEOWNERS
 ```
 
 See the [development notes](docs/development.md) and [AGENTS.md](AGENTS.md) before changing anything.

@@ -74,6 +74,28 @@ class ValidatorCatchesProblemsTest(unittest.TestCase):
         self.assertNotEqual(out.returncode, 0)
         self.assertIn('repo-root paths', out.stderr + out.stdout)
 
+    def test_external_loads_on_the_website_are_caught(self):
+        def edit(p):
+            f = p / 'site/index.html'
+            f.write_text(f.read_text().replace('</head>', '<script src="https://cdn.example.com/x.js"></script></head>'))
+        out = self.broken(edit)
+        self.assertNotEqual(out.returncode, 0)
+        self.assertIn('other sites', out.stderr + out.stdout)
+
+    def test_publishing_on_push_is_refused(self):
+        def edit(p):
+            f = p / '.github/workflows/pages.yml'
+            f.write_text(f.read_text().replace('  workflow_dispatch:', '  workflow_dispatch:\n  push:\n    branches: [main]'))
+        out = self.broken(edit)
+        self.assertNotEqual(out.returncode, 0)
+        self.assertIn('manual run', out.stderr + out.stdout)
+
+    def test_an_unlabelled_demo_page_is_refused(self):
+        def edit(p):
+            f = p / 'site/demo/index.html'
+            f.write_text(f.read_text().replace('fabricated data', 'sample data'))
+        self.assertNotEqual(self.broken(edit).returncode, 0)
+
     def test_undocumented_command_is_caught(self):
         def edit(p):
             f = p / 'SKILL.md'

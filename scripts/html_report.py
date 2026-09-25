@@ -141,7 +141,7 @@ def build_model(rows, coverage=None, prices=None, since=None, now=None, period_l
     if since:
         cutoff = parse_ts(since if 'T' in since else since + 'T00:00:00+00:00')
         measured = [r for r in measured if (parse_ts(r.get('timestamp')) or now) >= cutoff] if cutoff else measured
-    model = {'generated': now, 'since': since, 'period_label': (period['label'] if period else period_label), 'period_kind': period.get('kind') if period else None,
+    model = {'generated': now, 'banner': None, 'since': since, 'period_label': (period['label'] if period else period_label), 'period_kind': period.get('kind') if period else None,
              'period_days': ((period['start'].astimezone().date(), (period['end'] - datetime.timedelta(microseconds=1)).astimezone().date()) if period else None), 'currency': (prices or {}).get('currency'), 'priced': bool(prices)}
     total = sum(r['total_tokens'] for r in measured)
     fresh = reused = writing = 0
@@ -462,6 +462,7 @@ details.tbl{margin-top:14px}details.tbl summary{display:block;padding:6px 0;colo
 dl{margin:8px 0 0}dt{font-weight:700;margin-top:12px}dd{margin:2px 0 0;color:var(--ink2)}ul.plain{margin:8px 0 0;padding-left:20px;color:var(--ink2)}
 #tip{position:fixed;z-index:9;pointer-events:none;background:var(--ink);color:var(--surface);padding:8px 11px;border-radius:9px;font-size:13px;max-width:320px;opacity:0;transition:opacity .08s}
 
+.banner{background:var(--chip);border:1px solid var(--line);border-left:4px solid var(--c2);border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:15px}
 .highlights{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:20px}.hl{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--seq);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:2px}
 .hlk{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700}.hl b{font-size:17px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.hld{font-size:14px;color:var(--ink2)}
 .hbars.convs li{grid-template-columns:minmax(160px,1.4fr) 1fr 90px;align-items:start}.cname{display:block;font-weight:600;line-height:1.35}.cmeta{display:block;font-weight:400;font-size:13px;color:var(--muted)}.convs .htrack{margin-top:6px}.convs .hval{margin-top:2px}
@@ -486,7 +487,8 @@ def render(m):
     first, last = m['first'], m['last']
     span = f'{first:%b %-d, %Y} to {last:%b %-d, %Y}' if first and last else 'no dated activity'
     if m.get('period_label'):
-        span = f"{m['period_label']} ({span})" if first and last else f"{m['period_label']} (no activity)"
+        label = m['period_label']
+        span = label if not (first and last) or span in label or label in span else f"{label} ({span})"
     typical_txt = f'{fmt_tokens(m["typical"])} tokens' if m['typical'] else 'n/a'
     reuse_pct = f'{m["reused"] / (m["fresh"] + m["reused"]):.0%}' if (m['fresh'] + m['reused']) and m['reused'] else '—'
     hidden_sessions = sum(v for k, v in m['links'].items() if k != 'unlinked')
@@ -496,6 +498,7 @@ def render(m):
     if not m.get('period_label'):
         headline = 'Your AI usage, in plain English'
     highlights = render_highlights(m)
+    banner_html = f'<div class="banner" role="note">{esc(m["banner"])}</div>' if m.get('banner') else ''
     cost_html = ''
     if m['priced'] and m['cost'] is not None:
         extra = ''
@@ -524,7 +527,7 @@ def render(m):
     link_txt = '; '.join(link_bits) + '.' if link_bits else 'No parent/helper links were found in these logs.'
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{esc(headline)}</title><style>{CSS}</style></head><body><main>
-<header><div><h1>{esc(headline)}</h1><p class="sub">{esc(span)} · from {esc(tools)} · everything on this page was worked out on your own computer</p></div>
+{banner_html}<header><div><h1>{esc(headline)}</h1><p class="sub">{esc(span)} · from {esc(tools)} · everything on this page was worked out on your own computer</p></div>
 <button class="theme" id="themebtn" type="button">Switch light / dark</button></header>
 
 <section class="hero card"><div><span class="big">{esc(fmt_tokens(m['total']))}</span><span class="unit">tokens processed</span></div>
@@ -634,7 +637,8 @@ def render_prompt_page(dd, model):
     prompt_full = f'<details class="tbl"><summary>Show the full prompt text</summary><pre class="prompt">{esc(dd["prompt_full"])}</pre></details>' if dd.get('prompt_full') else ''
     note = f'<p class="muted small">{esc(dd["prompt_note"])}</p>' if dd.get('prompt_note') else ''
     chart = step_timeline(dd['steps'])
-    body = f"""<header><div><h1>One prompt, taken apart</h1><p class="sub">{esc(title[:200])}</p><p class="sub small">{esc(f"{first:%b %-d, %Y %H:%M}") if first else ""}{" · took " + esc(duration) if duration else ""}</p></div>
+    banner_html = f'<div class="banner" role="note">{esc(model["banner"])}</div>' if model.get('banner') else ''
+    body = f"""{banner_html}<header><div><h1>One prompt, taken apart</h1><p class="sub">{esc(title[:200])}</p><p class="sub small">{esc(f"{first:%b %-d, %Y %H:%M}") if first else ""}{" · took " + esc(duration) if duration else ""}</p></div>
 <button class="theme" id="themebtn" type="button">Switch light / dark</button></header>
 <section class="hero card"><div><span class="big">{esc(fmt_tokens(dd['tokens']))}</span><span class="unit">tokens processed</span></div>
 <p>About <b>{esc(fmt_pages(dd['tokens']))}</b> of text. That is <b>{dd['times_typical'] if dd['times_typical'] is not None else '—'}× your typical prompt</b> <span class="badge lvl{lvl}">{esc(dd['size'] or '')}</span> · {esc(dd['complexity'])}.</p></section>
@@ -651,7 +655,7 @@ def render_prompt_page(dd, model):
 <section><h2>Good to know</h2><ul class="plain"><li>Tokens are processed work, not dollars.</li><li>Every step re-reads the conversation so far, so long tasks get heavy even when little new text is produced.</li>
 <li>A “possible explanation” is a clue worth checking, never proof.</li></ul><p class="muted small">Generated {model['generated']:%b %-d, %Y %H:%M}. This file may contain your prompt text — check before sharing.</p></section>"""
     return (f'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-            f'<title>One prompt, taken apart</title><style>{CSS}.legend.inline{{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:8px}}.hyp{{background:var(--chip);border-radius:10px;padding:8px 12px;list-style:none;margin-left:-20px}}'
+            f'<title>One prompt, taken apart</title><style>{CSS}.banner{{background:var(--chip);border:1px solid var(--line);border-left:4px solid var(--c2);border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:15px}}.legend.inline{{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:8px}}.hyp{{background:var(--chip);border-radius:10px;padding:8px 12px;list-style:none;margin-left:-20px}}'
             f'.obs li{{margin-bottom:8px}}pre.prompt{{white-space:pre-wrap;background:var(--chip);padding:12px;border-radius:10px;font-size:14px;overflow:auto;max-height:340px}}code{{font-size:13px}}</style></head>'
             f'<body><main>{body}</main><div id="tip" role="tooltip"></div><script>{JS}</script></body></html>')
 
@@ -689,6 +693,7 @@ def main(argv=None):
     ap.add_argument('--task', help='Build a one-prompt deep-dive page for this task id (from the query tool prompts command)')
     ap.add_argument('--full-prompt', action='store_true', help='With --task: include the full prompt text from the source transcript')
     ap.add_argument('--prices', type=Path, help='optional JSON price list (see prices.example.json)')
+    ap.add_argument('--banner', help='A note shown at the top of the report, for example to label a demo')
     args = ap.parse_args(argv)
     ledger = args.ledger.expanduser()
     coverage_path = ledger.with_name('coverage.json')
@@ -703,7 +708,9 @@ def main(argv=None):
             ap.error(str(e))
         task_rows = [r for r in measured if deepdive.task_key(r) == dd['task_id']]
         out = (args.out or ledger.with_name(f'prompt-{dd["task_id"][:10]}.html')).expanduser()
-        out.write_text(render_prompt_page(dd, build_model(task_rows, coverage, prices)), encoding='utf-8')
+        task_model = build_model(task_rows, coverage, prices)
+        task_model['banner'] = args.banner
+        out.write_text(render_prompt_page(dd, task_model), encoding='utf-8')
         print(out)
         return 0
     period = None
@@ -721,6 +728,7 @@ def main(argv=None):
     if args.session:
         label = f'{label + ", " if label else ""}one conversation'
     model = build_model(rows, coverage, prices, period_label=label, period=period)
+    model['banner'] = args.banner
     out = (args.out or ledger.with_name('report.html')).expanduser()
     out.write_text(render(model), encoding='utf-8')
     print(out)
